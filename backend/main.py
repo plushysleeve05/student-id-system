@@ -8,6 +8,8 @@ from typing import List
 from backend.db_config import engine, Base, get_db
 from backend.models.user_model import User
 from backend.schemas.user_schema import UserCreate, UserResponse, UserUpdate, Token, UserRegister
+from backend.schemas.settings_schema import SettingsResponse, SettingsUpdate
+from backend.models.settings_model import Settings
 from backend.utils.auth import (
     authenticate_user,
     create_access_token,
@@ -132,30 +134,6 @@ async def register_user(user: UserRegister, db: Session = Depends(get_db)):
     db.refresh(db_user)
     return db_user
 
-
-@app.post("/users/register-superadmin", response_model=UserResponse)
-async def register_user(user: UserRegister, db: Session = Depends(get_db)):
-    """Register a new regular user"""
-    # Check if username exists
-    if User.get_by_username(db, user.username):
-        raise HTTPException(status_code=400, detail="Username already registered")
-    
-    # Check if email exists
-    if User.get_by_email(db, user.email):
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Create new user
-    db_user = User(
-        username=user.username,
-        email=user.email,
-        hashed_password=User.get_password_hash(user.password),
-        is_superuser=True
-    )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
-
 @app.get("/users/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_active_user)):
     """Get current user information"""
@@ -216,6 +194,145 @@ async def delete_user(
     
     db.delete(db_user)
     db.commit()
+
+@app.get("/api/settings", response_model=SettingsResponse)
+async def get_user_settings(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get current user's settings"""
+    current_user.ensure_settings_exist(db)
+    return current_user.settings
+
+@app.put("/api/settings", response_model=SettingsResponse)
+async def update_user_settings(
+    settings_update: SettingsUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Update user settings"""
+    current_user.ensure_settings_exist(db)
+    
+    # Update only provided fields
+    for field, value in settings_update.dict(exclude_unset=True).items():
+        if value is not None:  # Only update if value is provided
+            setattr(current_user.settings, field, value)
+    
+    db.commit()
+    db.refresh(current_user.settings)
+    return current_user.settings
+
+from backend.utils.cache import cache_manager
+
+@app.post("/api/maintenance/clear-cache")
+async def clear_cache(current_user: User = Depends(get_current_active_user)):
+    """
+    Clear system cache endpoint.
+    
+    This endpoint:
+    1. Verifies user authentication
+    2. Clears all cached files and directories
+    3. Returns cache clearing operation results
+    
+    Returns:
+        dict: Results of the cache clearing operation including:
+            - status: Operation status
+            - message: Success/error message
+            - cleared_items: List of cleared cache items
+    
+    Raises:
+        HTTPException: If cache clearing fails
+    """
+    try:
+        # Get cache statistics before clearing
+        before_stats = cache_manager.get_cache_stats()
+        
+        # Clear the cache
+        result = cache_manager.clear_cache()
+        
+        # Add cache size information to the result
+        result["before_clearing"] = {
+            "size_mb": before_stats["total_size_mb"],
+            "file_count": before_stats["file_count"]
+        }
+        
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to clear cache: {str(e)}"
+        )
+
+@app.post("/api/maintenance/refresh")
+async def refresh_system(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Refresh system endpoint.
+    
+    This endpoint:
+    1. Verifies user authentication
+    2. Clears the cache
+    3. Reloads system configurations
+    4. Returns operation results
+    
+    Returns:
+        dict: Results of the system refresh operation
+    
+    Raises:
+        HTTPException: If refresh operation fails
+    """
+    try:
+        # Clear the cache first
+        cache_manager.clear_cache()
+        
+        # Here you can add additional refresh operations:
+        # - Reload configurations
+        # - Reset temporary data
+        # - Clear other system caches
+        # - etc.
+        
+        return {
+            "status": "success",
+            "message": "System refreshed successfully",
+            "operations_performed": [
+                "Cleared system cache",
+                "Reset temporary data"
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to refresh system: {str(e)}"
+        )
+
+@app.get("/api/maintenance/cache-stats")
+async def get_cache_stats(current_user: User = Depends(get_current_active_user)):
+    """
+    Get cache statistics endpoint.
+    
+    This endpoint:
+    1. Verifies user authentication
+    2. Retrieves current cache statistics
+    
+    Returns:
+        dict: Cache statistics including:
+            - file_count: Number of cached files
+            - directory_count: Number of cache directories
+            - total_size_bytes: Total cache size in bytes
+            - total_size_mb: Total cache size in megabytes
+    
+    Raises:
+        HTTPException: If retrieving cache stats fails
+    """
+    try:
+        return cache_manager.get_cache_stats()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get cache statistics: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn

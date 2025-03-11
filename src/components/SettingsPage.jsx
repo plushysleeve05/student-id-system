@@ -9,46 +9,53 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { fetchToken } from "../Auth";
-
-const API_URL = "http://127.0.0.1:8000";
+import { API_BASE_URL } from "../config";
 
 function SettingsPage({ darkMode, toggleDarkMode }) {
   const [settings, setSettings] = React.useState({
-    security: {
-      two_factor_auth: false,
-      session_timeout: 30,
-    },
-    notifications: {
-      system_notifications: true,
-      email_alerts: true,
-    }
+    two_factor_auth: false,
+    session_timeout: 30,
+    system_notifications: true,
+    email_alerts: true
   });
   const [isLoading, setIsLoading] = React.useState(false);
 
-  // Fetch initial settings
+  // Fetch initial settings and cache stats
   React.useEffect(() => {
-    const fetchSettings = async () => {
+    const fetchData = async () => {
       try {
         const token = fetchToken();
-        const response = await fetch(`${API_URL}/api/settings`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        const headers = {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        };
 
-        if (!response.ok) {
+        // Fetch settings
+        const settingsResponse = await fetch(`${API_BASE_URL}/api/settings`, { headers });
+        if (!settingsResponse.ok) {
           throw new Error('Failed to fetch settings');
         }
+        const settingsData = await settingsResponse.json();
 
-        const data = await response.json();
-        setSettings(data);
+        // Fetch cache stats
+        const cacheStatsResponse = await fetch(`${API_BASE_URL}/api/maintenance/cache-stats`, { headers });
+        if (!cacheStatsResponse.ok) {
+          throw new Error('Failed to fetch cache stats');
+        }
+        const cacheStats = await cacheStatsResponse.json();
+
+        // Combine settings and cache stats
+        setSettings({
+          ...settingsData,
+          cache_size_mb: cacheStats.total_size_mb,
+          cache_file_count: cacheStats.file_count
+        });
       } catch (error) {
-        console.error('Failed to fetch settings:', error);
+        console.error('Failed to fetch data:', error);
       }
     };
 
-    fetchSettings();
+    fetchData();
   }, []);
 
   // Handle security settings changes
@@ -57,7 +64,7 @@ function SettingsPage({ darkMode, toggleDarkMode }) {
     setIsLoading(true);
     try {
       const token = fetchToken();
-      const response = await fetch(`${API_URL}/api/settings`, {
+      const response = await fetch(`${API_BASE_URL}/api/settings`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -88,7 +95,7 @@ function SettingsPage({ darkMode, toggleDarkMode }) {
     setIsLoading(true);
     try {
       const token = fetchToken();
-      const response = await fetch(`${API_URL}/api/settings`, {
+      const response = await fetch(`${API_BASE_URL}/api/settings`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -116,7 +123,7 @@ function SettingsPage({ darkMode, toggleDarkMode }) {
     setIsLoading(true);
     try {
       const token = fetchToken();
-      const response = await fetch(`${API_URL}/api/settings`, {
+      const response = await fetch(`${API_BASE_URL}/api/settings`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -207,7 +214,7 @@ function SettingsPage({ darkMode, toggleDarkMode }) {
                   <input
                     type="checkbox"
                     className="sr-only peer"
-                    checked={settings.security.two_factor_auth}
+                    checked={settings.two_factor_auth}
                     onChange={handleTwoFactorChange}
                     disabled={isLoading}
                   />
@@ -223,7 +230,7 @@ function SettingsPage({ darkMode, toggleDarkMode }) {
                     type="number"
                     min="5"
                     max="120"
-                    value={settings.security.session_timeout}
+                    value={settings.session_timeout}
                     onChange={handleSessionTimeoutChange}
                     disabled={isLoading}
                     className="block w-24 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -258,7 +265,7 @@ function SettingsPage({ darkMode, toggleDarkMode }) {
                   <input
                     type="checkbox"
                     className="sr-only peer"
-                    checked={settings.notifications.system_notifications}
+                    checked={settings.system_notifications}
                     onChange={(e) => handleNotificationChange('system_notifications', e.target.checked)}
                     disabled={isLoading}
                   />
@@ -276,7 +283,7 @@ function SettingsPage({ darkMode, toggleDarkMode }) {
                   <input
                     type="checkbox"
                     className="sr-only peer"
-                    checked={settings.notifications.email_alerts}
+                    checked={settings.email_alerts}
                     onChange={(e) => handleNotificationChange('email_alerts', e.target.checked)}
                     disabled={isLoading}
                   />
@@ -297,20 +304,91 @@ function SettingsPage({ darkMode, toggleDarkMode }) {
               <h2 className="text-xl font-semibold">System Maintenance</h2>
             </div>
             <div className="space-y-4">
-              <button 
-                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isLoading}
-              >
-                <Trash2 className="w-5 h-5" />
-                <span>Clear Cache</span>
-              </button>
-              <button 
-                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isLoading}
-              >
-                <RefreshCw className="w-5 h-5" />
-                <span>Refresh System</span>
-              </button>
+              <div className="space-y-2 mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Cache Size: {settings.cache_size_mb || 0} MB
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Cached Files: {settings.cache_file_count || 0}
+                </p>
+              </div>
+              <div className="space-y-4">
+                <button 
+                  onClick={async () => {
+                    setIsLoading(true);
+                    try {
+                      const token = fetchToken();
+                      const response = await fetch(`${API_BASE_URL}/api/maintenance/clear-cache`, {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${token}`,
+                          'Content-Type': 'application/json',
+                        },
+                      });
+
+                      if (!response.ok) {
+                        throw new Error('Failed to clear cache');
+                      }
+
+                      const result = await response.json();
+                      
+                      // Update cache stats in settings
+                      setSettings(prev => ({
+                        ...prev,
+                        cache_size_mb: 0,
+                        cache_file_count: 0
+                      }));
+
+                      // Show success message with details
+                      alert(`Cache cleared successfully!\nFreed up: ${result.before_clearing.size_mb} MB\nCleared files: ${result.before_clearing.file_count}`);
+                    } catch (error) {
+                      console.error('Failed to clear cache:', error);
+                      alert('Failed to clear cache: ' + error.message);
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isLoading}
+                >
+                  <Trash2 className="w-5 h-5" />
+                  <span>Clear Cache</span>
+                </button>
+                <button 
+                  onClick={async () => {
+                    setIsLoading(true);
+                    try {
+                      const token = fetchToken();
+                      const response = await fetch(`${API_BASE_URL}/api/maintenance/refresh`, {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${token}`,
+                          'Content-Type': 'application/json',
+                        },
+                      });
+
+                      if (!response.ok) {
+                        throw new Error('Failed to refresh system');
+                      }
+
+                      const result = await response.json();
+                      
+                      // Show success message with operations performed
+                      alert(`System refreshed successfully!\nOperations performed:\n${result.operations_performed.join('\n')}`);
+                    } catch (error) {
+                      console.error('Failed to refresh system:', error);
+                      alert('Failed to refresh system: ' + error.message);
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isLoading}
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  <span>Refresh System</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

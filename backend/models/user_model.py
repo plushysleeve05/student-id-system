@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from backend.db_config import Base
 from passlib.context import CryptContext
 from typing import Optional
@@ -59,3 +60,16 @@ class User(Base):
 
     def __repr__(self) -> str:
         return f"<User {self.username}>"
+
+    # Relationship with Settings model
+    settings = relationship("Settings", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+    def ensure_settings_exist(self, db_session) -> None:
+        """
+        Ensure user has settings, create default if not exists
+        """
+        if not self.settings:
+            from backend.models.settings_model import Settings
+            self.settings = Settings()
+            db_session.add(self)
+            db_session.commit()
