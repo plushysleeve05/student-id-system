@@ -12,6 +12,8 @@ import shutil
 from pathlib import Path
 import logging
 from typing import List, Optional
+from sqlalchemy.orm import Session
+from backend.models.settings_model import Settings
 
 # Set up logging for cache operations
 logger = logging.getLogger(__name__)
@@ -48,7 +50,7 @@ class CacheManager:
         """
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def clear_cache(self) -> dict:
+    def clear_cache(self, db: Session, user_id: int) -> dict:
         """
         Clear all cached files and directories.
         
@@ -88,6 +90,11 @@ class CacheManager:
             # Log the successful operation
             logger.info(f"Cache cleared successfully. Cleared items: {cleared_items}")
 
+            # Update user's settings with new cache stats
+            user_settings = Settings.get_user_settings(db, user_id)
+            if user_settings:
+                user_settings.update_cache_stats(db, 0, 0)
+
             return {
                 "status": "success",
                 "message": "Cache cleared successfully",
@@ -115,7 +122,7 @@ class CacheManager:
                 total_size += item.stat().st_size
         return total_size
 
-    def get_cache_stats(self) -> dict:
+    def get_cache_stats(self, db: Session, user_id: int) -> dict:
         """
         Get comprehensive statistics about the cache.
         
@@ -147,12 +154,14 @@ class CacheManager:
                 elif item.is_dir():
                     dir_count += 1
 
-            return {
+            stats = {
                 "file_count": file_count,
                 "directory_count": dir_count,
                 "total_size_bytes": total_size,
                 "total_size_mb": round(total_size / (1024 * 1024), 2)
             }
+            
+            # Update user's settings with current stats
         except Exception as e:
             logger.error(f"Error getting cache stats: {str(e)}")
             raise Exception(f"Failed to get cache statistics: {str(e)}")

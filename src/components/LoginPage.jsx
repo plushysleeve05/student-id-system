@@ -6,6 +6,8 @@ const LoginPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center p-6">
       <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-2xl flex overflow-hidden w-full max-w-[1100px]">
+
+        
         {/* Left side with illustration */}
         <div className="hidden md:flex w-1/2 bg-blue-600 p-12 items-center justify-center relative overflow-hidden">
           <div className="relative z-10 text-white max-w-md">

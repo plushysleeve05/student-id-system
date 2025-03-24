@@ -1,52 +1,32 @@
-import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from dotenv import load_dotenv
-import os
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 from backend.db_config import Base, engine
-from backend.models.user_model import User
-from backend.models.settings_model import Settings
+import os
 
-load_dotenv()
+DB_NAME = os.getenv("DB_NAME", "student_id_system")
+
+def create_database():
+    """Creates the PostgreSQL database if it does not exist."""
+    try:
+        temp_engine = create_engine(f"postgresql://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'postgres')}@{os.getenv('DB_HOST', 'localhost')}/postgres", isolation_level="AUTOCOMMIT")
+        with temp_engine.connect() as conn:
+            result = conn.execute(f"SELECT 1 FROM pg_catalog.pg_database WHERE datname = '{DB_NAME}'").fetchone()
+            if not result:
+                conn.execute(f'CREATE DATABASE {DB_NAME}')
+                print(f"Database '{DB_NAME}' created successfully!")
+            else:
+                print(f"Database '{DB_NAME}' already exists.")
+    except SQLAlchemyError as e:
+        print(f"Error while creating database: {e}")
 
 def create_tables():
+    """Creates tables using SQLAlchemy ORM."""
     try:
         Base.metadata.create_all(bind=engine)
         print("Database tables created successfully!")
-    except Exception as e:
+    except SQLAlchemyError as e:
         print(f"An error occurred while creating tables: {e}")
 
-def init_database():
-    # Connect to PostgreSQL server
-    conn = psycopg2.connect(
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD", "postgres"),
-        host=os.getenv("DB_HOST", "localhost")
-    )
-    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-    
-    cursor = conn.cursor()
-    db_name = os.getenv("DB_NAME", "student_id_system")
-    
-    try:
-        # Check if database exists
-        cursor.execute(f"SELECT 1 FROM pg_catalog.pg_database WHERE datname = '{db_name}'")
-        exists = cursor.fetchone()
-        
-        if not exists:
-            print(f"Creating database {db_name}...")
-            cursor.execute(f'CREATE DATABASE {db_name}')
-            print(f"Database {db_name} created successfully!")
-        else:
-            print(f"Database {db_name} already exists.")
-    except Exception as e:
-        print(f"An error occurred while creating database: {e}")
-        return
-    finally:
-        cursor.close()
-        conn.close()
-
-    # Create tables after database operations are complete
-    create_tables()
-
 if __name__ == "__main__":
-    init_database()
+    create_database()
+    create_tables()
