@@ -81,3 +81,5 @@ input:checked + .slider:before {
 .btn-primary:hover, .btn-secondary:hover, .btn-danger:hover {
   opacity: 0.8;
 }
+
+

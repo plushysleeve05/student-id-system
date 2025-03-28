@@ -12,8 +12,9 @@ import {
   Area,
 } from "recharts";
 import RecentLogins from "./RecentLogins";
-import LiveMonitoring from "./LiveMonitoring";
+// import LiveMonitoring from "./LiveMonitoring";
 import SecurityAlerts from "./SecurityAlerts";
+import Students from "./Students";
 
 // Mock Data for Charts
 const loginData = [
@@ -156,7 +157,7 @@ function Dashboard() {
           {/* Live Monitoring & Security Alerts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <LiveMonitoring />
+              <Students />
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <SecurityAlerts />
