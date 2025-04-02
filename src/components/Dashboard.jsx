@@ -1,5 +1,12 @@
-import React from "react";
-import { Eye, CheckCircle, AlertTriangle, Users, Clock, Calendar } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  Eye,
+  CheckCircle,
+  AlertTriangle,
+  Users,
+  Clock,
+  Calendar,
+} from "lucide-react";
 import {
   LineChart,
   Line,
@@ -36,10 +43,12 @@ function StatCard({ icon: Icon, label, value, change, color }) {
         <div>
           <p className="text-sm text-gray-600 dark:text-gray-400">{label}</p>
           <h3 className="text-2xl font-bold mt-1 dark:text-white">{value}</h3>
-          <p className={`text-sm mt-1 flex items-center space-x-1 ${
-            isPositive ? 'text-green-600' : 'text-red-600'
-          }`}>
-            <span>{isPositive ? '↑' : '↓'}</span>
+          <p
+            className={`text-sm mt-1 flex items-center space-x-1 ${
+              isPositive ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            <span>{isPositive ? "↑" : "↓"}</span>
             <span>{Math.abs(change)}% from last week</span>
           </p>
         </div>
@@ -57,8 +66,12 @@ function LoginTrendsGraph() {
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-lg font-semibold dark:text-white">Face Recognition Trends</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Last 7 days activity</p>
+          <h2 className="text-lg font-semibold dark:text-white">
+            Face Recognition Trends
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Last 7 days activity
+          </p>
         </div>
         <select className="px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm border-0">
           <option>Last 7 days</option>
@@ -70,23 +83,23 @@ function LoginTrendsGraph() {
         <AreaChart data={loginData}>
           <defs>
             <linearGradient id="colorRecognized" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#22C55E" stopOpacity={0.1}/>
-              <stop offset="95%" stopColor="#22C55E" stopOpacity={0}/>
+              <stop offset="5%" stopColor="#22C55E" stopOpacity={0.1} />
+              <stop offset="95%" stopColor="#22C55E" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="colorUnrecognized" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#EF4444" stopOpacity={0.1}/>
-              <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
+              <stop offset="5%" stopColor="#EF4444" stopOpacity={0.1} />
+              <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
           <XAxis dataKey="day" stroke="#6B7280" />
           <YAxis stroke="#6B7280" />
-          <Tooltip 
-            contentStyle={{ 
-              backgroundColor: '#1F2937',
-              border: 'none',
-              borderRadius: '0.5rem',
-              color: '#fff'
+          <Tooltip
+            contentStyle={{
+              backgroundColor: "#1F2937",
+              border: "none",
+              borderRadius: "0.5rem",
+              color: "#fff",
             }}
           />
           <Area
@@ -114,6 +127,48 @@ function LoginTrendsGraph() {
 }
 
 function Dashboard() {
+  const [stats, setStats] = useState({
+    totalFaces: 0,
+    recognizedFaces: 0,
+    unrecognizedFaces: 0,
+    loginAttempts: 0,
+    changes: {
+      totalFaces: 0,
+      recognizedFaces: 0,
+      unrecognizedFaces: 0,
+      loginAttempts: 0,
+    },
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch("http://10.205.0.10:8002/stats");
+        const data = await response.json();
+        setStats((prev) => ({
+          ...data,
+          changes: {
+            totalFaces: data.totalFaces - prev.totalFaces,
+            recognizedFaces: data.recognizedFaces - prev.recognizedFaces,
+            unrecognizedFaces: data.unrecognizedFaces - prev.unrecognizedFaces,
+            loginAttempts: data.loginAttempts - prev.loginAttempts,
+          },
+        }));
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+      }
+    };
+
+    // First fetch immediately
+    fetchStats();
+
+    // Then fetch every 5 seconds
+    const interval = setInterval(fetchStats, 5000);
+
+    // Clean up interval when component unmounts
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Stats Grid */}
@@ -121,29 +176,29 @@ function Dashboard() {
         <StatCard
           icon={Eye}
           label="Total Faces Detected"
-          value="2,750"
-          change={4.2}
+          value={stats.totalFaces.toLocaleString()}
+          change={stats.changes.totalFaces}
           color="bg-blue-600"
         />
         <StatCard
           icon={CheckCircle}
           label="Recognized Faces"
-          value="2,490"
-          change={3.1}
+          value={stats.recognizedFaces.toLocaleString()}
+          change={stats.changes.recognizedFaces}
           color="bg-green-600"
         />
         <StatCard
           icon={AlertTriangle}
           label="Unrecognized Faces"
-          value="260"
-          change={-1.8}
+          value={stats.unrecognizedFaces.toLocaleString()}
+          change={stats.changes.unrecognizedFaces}
           color="bg-red-600"
         />
         <StatCard
           icon={Users}
           label="Total Login Attempts"
-          value="3,012"
-          change={8.5}
+          value={stats.loginAttempts.toLocaleString()}
+          change={stats.changes.loginAttempts}
           color="bg-purple-600"
         />
       </div>
@@ -153,7 +208,7 @@ function Dashboard() {
         {/* Chart Section - Takes up 2 columns */}
         <div className="lg:col-span-2 space-y-6">
           <LoginTrendsGraph />
-          
+
           {/* Live Monitoring & Security Alerts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -169,8 +224,12 @@ function Dashboard() {
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-semibold dark:text-white">Recent Activity</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Latest login attempts</p>
+              <h2 className="text-lg font-semibold dark:text-white">
+                Recent Activity
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Latest login attempts
+              </p>
             </div>
             <button className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
               View All
