@@ -18,6 +18,8 @@ from backend.utils.auth import (
 )
 from backend.config import settings
 
+from backend.routes import dashboard_api
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
@@ -34,6 +36,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(dashboard_api.router)
+
 
 @app.post("/token", response_model=Token)
 async def login_for_access_token(

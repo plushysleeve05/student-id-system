@@ -1,3 +1,3 @@
-const API_BASE_URL = "https://student-id-system-oalk.onrender.com";
+const API_BASE_URL = "http://localhost:8000";
 
 export { API_BASE_URL };
