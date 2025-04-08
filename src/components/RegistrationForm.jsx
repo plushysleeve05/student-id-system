@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { setToken } from "../Auth";
 import { Mail, Lock, User, AlertCircle, Loader } from "lucide-react";
+import { API_BASE_URL } from "../config";
+
 
 const RegistrationForm = () => {
   const [formData, setFormData] = useState({
@@ -35,17 +36,20 @@ const RegistrationForm = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/users/register-superadmin", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: formData.username,
-          email: formData.email,
-          password: formData.password,
-        }),
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/users/register-superadmin`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            username: formData.username,
+            email: formData.email,
+            password: formData.password,
+          }),
+        }
+      );
 
       const data = await response.json();
 

@@ -1,15 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { API_BASE_URL } from "../config";
+import { Eye, CheckCircle, AlertTriangle, Users } from "lucide-react";
 import {
-  Eye,
-  CheckCircle,
-  AlertTriangle,
-  Users,
-  Clock,
-  Calendar,
-} from "lucide-react";
-import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -19,24 +11,11 @@ import {
   Area,
 } from "recharts";
 import RecentLogins from "./RecentLogins";
-// import LiveMonitoring from "./LiveMonitoring";
 import SecurityAlerts from "./SecurityAlerts";
 import Students from "./Students";
 
-// Mock Data for Charts
-const loginData = [
-  { day: "Mon", recognized: 120, unrecognized: 5 },
-  { day: "Tue", recognized: 98, unrecognized: 8 },
-  { day: "Wed", recognized: 150, unrecognized: 12 },
-  { day: "Thu", recognized: 130, unrecognized: 15 },
-  { day: "Fri", recognized: 160, unrecognized: 7 },
-  { day: "Sat", recognized: 170, unrecognized: 9 },
-  { day: "Sun", recognized: 180, unrecognized: 6 },
-];
-
-// Reusable Stat Card Component
-function StatCard({ icon: Icon, label, value, change, color }) {
-  const isPositive = change >= 0;
+function StatCard({ icon: Icon, label, value, percentageChange, color }) {
+  const isPositive = percentageChange >= 0;
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-center justify-between">
@@ -49,7 +28,7 @@ function StatCard({ icon: Icon, label, value, change, color }) {
             }`}
           >
             <span>{isPositive ? "↑" : "↓"}</span>
-            <span>{Math.abs(change)}% from last week</span>
+            <span>{Math.abs(percentageChange)}% from last check</span>
           </p>
         </div>
         <div className={`p-3 rounded-lg ${color}`}>
@@ -60,70 +39,9 @@ function StatCard({ icon: Icon, label, value, change, color }) {
   );
 }
 
-// Graph Component
-function LoginTrendsGraph() {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-lg font-semibold dark:text-white">
-            Face Recognition Trends
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Last 7 days activity
-          </p>
-        </div>
-        <select className="px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm border-0">
-          <option>Last 7 days</option>
-          <option>Last 30 days</option>
-          <option>Last 90 days</option>
-        </select>
-      </div>
-      <ResponsiveContainer width="100%" height={300}>
-        <AreaChart data={loginData}>
-          <defs>
-            <linearGradient id="colorRecognized" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#22C55E" stopOpacity={0.1} />
-              <stop offset="95%" stopColor="#22C55E" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="colorUnrecognized" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#EF4444" stopOpacity={0.1} />
-              <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
-          <XAxis dataKey="day" stroke="#6B7280" />
-          <YAxis stroke="#6B7280" />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "#1F2937",
-              border: "none",
-              borderRadius: "0.5rem",
-              color: "#fff",
-            }}
-          />
-          <Area
-            type="monotone"
-            dataKey="recognized"
-            stroke="#22C55E"
-            strokeWidth={2}
-            fillOpacity={1}
-            fill="url(#colorRecognized)"
-            name="Recognized"
-          />
-          <Area
-            type="monotone"
-            dataKey="unrecognized"
-            stroke="#EF4444"
-            strokeWidth={2}
-            fillOpacity={1}
-            fill="url(#colorUnrecognized)"
-            name="Unrecognized"
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  );
+function calculatePercentageChange(current, previous) {
+  if (previous === 0) return current === 0 ? 0 : 100;
+  return Math.round(((current - previous) / previous) * 100);
 }
 
 function Dashboard() {
@@ -132,84 +50,146 @@ function Dashboard() {
     recognizedFaces: 0,
     unrecognizedFaces: 0,
     loginAttempts: 0,
-    changes: {
-      totalFaces: 0,
-      recognizedFaces: 0,
-      unrecognizedFaces: 0,
-      loginAttempts: 0,
-    },
   });
+
+  const [trendData, setTrendData] = useState([]);
+  const [previousStats, setPreviousStats] = useState(stats);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch("http://10.205.0.10:8002/stats");
+        const response = await fetch(`${API_BASE_URL}/api/dashboard/stats`);
         const data = await response.json();
-        setStats((prev) => ({
-          ...data,
-          changes: {
-            totalFaces: data.totalFaces - prev.totalFaces,
-            recognizedFaces: data.recognizedFaces - prev.recognizedFaces,
-            unrecognizedFaces: data.unrecognizedFaces - prev.unrecognizedFaces,
-            loginAttempts: data.loginAttempts - prev.loginAttempts,
-          },
-        }));
+        setPreviousStats(stats);
+        setStats({
+          totalFaces: data.totalFaces,
+          recognizedFaces: data.recognizedFaces,
+          unrecognizedFaces: data.unrecognizedFaces,
+          loginAttempts: data.loginAttempts,
+        });
       } catch (error) {
         console.error("Error fetching stats:", error);
       }
     };
 
-    // First fetch immediately
-    fetchStats();
+    const fetchTrends = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/dashboard/trends`);
+        const data = await response.json();
+        console.log("Trend data:", data);
+        setTrendData(
+          data.map((item) => ({
+            date: item.date,
+            recognized: item.recognized_faces,
+            unrecognized: item.unrecognized_faces,
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching trend data:", error);
+      }
+    };
 
-    // Then fetch every 5 seconds
-    const interval = setInterval(fetchStats, 5000);
+    // fetchStats();
+    // fetchTrends();
 
-    // Clean up interval when component unmounts
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchTrends();
+    }, 10000);
+
     return () => clearInterval(interval);
-  }, []);
+  }, [stats]);
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           icon={Eye}
           label="Total Faces Detected"
           value={stats.totalFaces.toLocaleString()}
-          change={stats.changes.totalFaces}
+          percentageChange={calculatePercentageChange(
+            stats.totalFaces,
+            previousStats.totalFaces
+          )}
           color="bg-blue-600"
         />
         <StatCard
           icon={CheckCircle}
           label="Recognized Faces"
           value={stats.recognizedFaces.toLocaleString()}
-          change={stats.changes.recognizedFaces}
+          percentageChange={calculatePercentageChange(
+            stats.recognizedFaces,
+            previousStats.recognizedFaces
+          )}
           color="bg-green-600"
         />
         <StatCard
           icon={AlertTriangle}
           label="Unrecognized Faces"
           value={stats.unrecognizedFaces.toLocaleString()}
-          change={stats.changes.unrecognizedFaces}
+          percentageChange={calculatePercentageChange(
+            stats.unrecognizedFaces,
+            previousStats.unrecognizedFaces
+          )}
           color="bg-red-600"
         />
         <StatCard
           icon={Users}
           label="Total Login Attempts"
           value={stats.loginAttempts.toLocaleString()}
-          change={stats.changes.loginAttempts}
+          percentageChange={calculatePercentageChange(
+            stats.loginAttempts,
+            previousStats.loginAttempts
+          )}
           color="bg-purple-600"
         />
       </div>
 
-      {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart Section - Takes up 2 columns */}
         <div className="lg:col-span-2 space-y-6">
-          <LoginTrendsGraph />
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h2 className="text-lg font-semibold dark:text-white mb-2">
+              Face Recognition Trends
+            </h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={trendData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#374151"
+                  opacity={0.1}
+                />
+                <XAxis dataKey="date" stroke="#6B7280" />
+                <YAxis stroke="#6B7280" />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#1F2937",
+                    border: "none",
+                    borderRadius: "0.5rem",
+                    color: "#fff",
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="recognized"
+                  stroke="#22C55E"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="rgba(34, 197, 94, 0.2)"
+                  name="Recognized"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="unrecognized"
+                  stroke="#EF4444"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="rgba(239, 68, 68, 0.2)"
+                  name="Unrecognized"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
 
-          {/* Live Monitoring & Security Alerts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <Students />
@@ -220,7 +200,6 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Recent Activity Section - Takes up 1 column */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
