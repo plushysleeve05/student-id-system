@@ -9,17 +9,15 @@ import {
 } from "@heroicons/react/24/outline";
 
 function LiveMonitoring() {
-  // State for video/live feed and detection approach
   const [isLive, setIsLive] = useState(true);
   const [detectionApproach, setDetectionApproach] = useState("matching");
-
-  // Camera enumeration
   const [cameras, setCameras] = useState([]);
   const [selectedCamera, setSelectedCamera] = useState("");
   const videoRef = useRef(null);
   const [stream, setStream] = useState(null);
+  const [videoFile, setVideoFile] = useState(null);
+  const [previewURL, setPreviewURL] = useState(null);
 
-  // Mock data for live monitoring
   const recentEvents = [
     {
       id: 1,
@@ -44,46 +42,7 @@ function LiveMonitoring() {
     },
   ];
 
-  /**
-   *  Enumerate cameras whenever user selects "Live Feed".
-   *  We request permission to ensure camera labels can be read.
-   */
-  useEffect(() => {
-    if (isLive) {
-      navigator.mediaDevices
-        .getUserMedia({ video: true }) // ask for camera permission
-        .then(() => {
-          return navigator.mediaDevices.enumerateDevices();
-        })
-        .then((devices) => {
-          const videoDevices = devices.filter(
-            (device) => device.kind === "videoinput"
-          );
-          setCameras(videoDevices);
-
-          // Optionally, auto-select the first camera
-          if (videoDevices.length > 0) {
-            setSelectedCamera(videoDevices[0].deviceId);
-          }
-        })
-        .catch((err) => {
-          console.error("Error enumerating cameras:", err);
-        });
-    } else {
-      // Clear camera-related states if user switches away from live feed
-      setCameras([]);
-      setSelectedCamera("");
-      stopStream();
-    }
-    // Cleanup on unmount or when toggling away from live feed
-    return () => {
-      stopStream();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLive]);
-
-  // Stop any active stream
-  const stopStream = () => {
+  const stopStream = React.useCallback(() => {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
       setStream(null);
@@ -91,13 +50,34 @@ function LiveMonitoring() {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-  };
+  }, [stream]);
 
-  // Start streaming from the selected camera
+  useEffect(() => {
+    if (isLive) {
+      navigator.mediaDevices
+        .getUserMedia({ video: true })
+        .then(() => navigator.mediaDevices.enumerateDevices())
+        .then((devices) => {
+          const videoDevices = devices.filter(
+            (device) => device.kind === "videoinput"
+          );
+          setCameras(videoDevices);
+          if (videoDevices.length > 0) {
+            setSelectedCamera(videoDevices[0].deviceId);
+          }
+        })
+        .catch((err) => console.error("Error enumerating cameras:", err));
+    } else {
+      setCameras([]);
+      setSelectedCamera("");
+      stopStream();
+    }
+    return () => stopStream();
+  }, [isLive, stopStream]);
+
   const startCameraStream = () => {
     if (!selectedCamera) return;
-    stopStream(); // stop any previous stream
-
+    stopStream();
     navigator.mediaDevices
       .getUserMedia({ video: { deviceId: selectedCamera } })
       .then((newStream) => {
@@ -106,14 +86,39 @@ function LiveMonitoring() {
           videoRef.current.srcObject = newStream;
         }
       })
-      .catch((err) => {
-        console.error("Error starting camera stream:", err);
+      .catch((err) => console.error("Error starting camera stream:", err));
+  };
+
+  const handleVideoChange = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith("video/")) {
+      setVideoFile(file);
+      setPreviewURL(URL.createObjectURL(file));
+    } else {
+      alert("Please select a valid video file");
+    }
+  };
+
+  const handleVideoUpload = async () => {
+    if (!videoFile) return;
+
+    const formData = new FormData();
+    formData.append("video", videoFile);
+
+    try {
+      const response = await fetch("http://<your-backend-ip>:8000/upload", {
+        method: "POST",
+        body: formData,
       });
+      const result = await response.json();
+      console.log("Upload response:", result);
+    } catch (error) {
+      console.error("Upload error:", error);
+    }
   };
 
   return (
     <div className="p-4">
-      {/* Header */}
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
           <CameraIcon className="w-5 h-5 text-blue-600" />
@@ -122,7 +127,6 @@ function LiveMonitoring() {
         <p className="text-sm text-gray-600">Real-time access events</p>
       </div>
 
-      {/* Video Mode Selection */}
       <div className="mb-4">
         <h3 className="text-sm font-medium text-gray-800">Video Mode</h3>
         <div className="flex gap-4 mt-2">
@@ -149,7 +153,6 @@ function LiveMonitoring() {
         </div>
       </div>
 
-      {/* Detection Approach Selection */}
       <div className="mb-4">
         <h3 className="text-sm font-medium text-gray-800">
           Detection Approach
@@ -178,13 +181,10 @@ function LiveMonitoring() {
         </div>
       </div>
 
-      {/* Layout: Video/Upload on left, Recent Events on right */}
       <div className="flex gap-6">
-        {/* Video/Upload Section */}
         <div className="flex-1">
           {isLive ? (
             <div className="space-y-4 dark:bg-gray-800 rounded-lg p-4">
-              {/* Camera Selection */}
               {cameras.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -209,8 +209,6 @@ function LiveMonitoring() {
                   </button>
                 </div>
               )}
-
-              {/* Live Feed Preview */}
               <div className="relative rounded-lg overflow-hidden bg-gray-900 aspect-video">
                 <video
                   ref={videoRef}
@@ -219,14 +217,12 @@ function LiveMonitoring() {
                   muted
                   className="absolute inset-0 w-full h-full object-cover"
                 />
-                {/* If no camera stream, fallback */}
                 {!stream && (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <CameraIcon className="w-12 h-12 text-gray-600" />
                     <p className="text-sm text-white ml-2">No Camera Stream</p>
                   </div>
                 )}
-                {/* Live Indicator */}
                 {stream && (
                   <div className="absolute top-4 left-4 px-2 py-1 bg-black/50 rounded text-xs text-white flex items-center gap-1">
                     <div className="w-2 h-2 bg-red-500 rounded-full"></div>
@@ -236,14 +232,34 @@ function LiveMonitoring() {
               </div>
             </div>
           ) : (
-            <div className="relative mb-6 rounded-lg overflow-hidden bg-gray-900 aspect-video flex flex-col items-center justify-center gap-2">
-              <ArrowUpTrayIcon className="w-12 h-12 text-gray-600" />
-              <p className="text-sm text-white">Upload Video</p>
-            </div>
+            <><div className="relative mb-6 rounded-lg overflow-hidden bg-gray-900 aspect-video flex flex-col items-center justify-center gap-2">
+                {!previewURL ? (
+                  <>
+                    <ArrowUpTrayIcon className="w-12 h-12 text-gray-600" />
+                    <p className="text-sm text-white">Upload Video</p>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={handleVideoChange}
+                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer" />
+                  </>
+                ) : (
+                  <video controls className="w-full h-full object-cover">
+                    <source src={previewURL} type={videoFile.type} />
+                    Your browser does not support the video tag.
+                  </video>
+                )}
+              </div>
+                <button
+                onClick={handleVideoUpload}
+                className="px-4 py-2 bg-blue-500 text-white rounded"
+                disabled={!videoFile}
+              >
+                  Upload Video
+                </button></>
           )}
         </div>
 
-        {/* Recent Events Section */}
         <div className="w-1/3">
           <div className="space-y-4">
             {recentEvents.map((event) => (
@@ -277,8 +293,6 @@ function LiveMonitoring() {
               </div>
             ))}
           </div>
-
-          {/* View All Link */}
           <button className="mt-4 text-sm text-blue-600 hover:text-blue-700">
             View All Events →
           </button>

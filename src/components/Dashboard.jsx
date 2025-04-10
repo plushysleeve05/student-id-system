@@ -11,7 +11,6 @@ import {
   Area,
 } from "recharts";
 import RecentLogins from "./RecentLogins";
-import SecurityAlerts from "./SecurityAlerts";
 import Students from "./Students";
 
 function StatCard({ icon: Icon, label, value, percentageChange, color }) {
@@ -80,8 +79,8 @@ function Dashboard() {
         setTrendData(
           data.map((item) => ({
             date: item.date,
-            recognized: item.recognized_faces,
-            unrecognized: item.unrecognized_faces,
+            recognized: item.recognizedFaces,
+            unrecognized: item.unrecognizedFaces,
           }))
         );
       } catch (error) {
@@ -190,13 +189,13 @@ function Dashboard() {
             </ResponsiveContainer>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <Students />
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            {/* <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <SecurityAlerts />
-            </div>
+            </div> */}
           </div>
         </div>
 

@@ -1,14 +1,13 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { useLocation, Navigate } from "react-router-dom";
-import { jwtDecode } from "jwt-decode"; // Updated: named import instead of default
+import { jwtDecode } from "jwt-decode";
 import { API_BASE_URL } from "./config";
 
-// Create AuthContext
 export const AuthContext = createContext(null);
 
-// AuthProvider component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchUserDetails = async () => {
     try {
@@ -34,39 +33,32 @@ export const AuthProvider = ({ children }) => {
     const token = fetchToken();
     if (token && isTokenValid(token)) {
       const decoded = jwtDecode(token);
-
-      // Set basic user info from token
       const initialUserData = {
         id: decoded.sub,
         role: decoded.is_superuser ? "admin" : "user",
       };
       setUser(initialUserData);
 
-      // Calculate time until token expiration (in milliseconds)
       const expiresIn = decoded.exp * 1000 - Date.now();
       if (expiresIn <= 0) {
-        // Token expired: log out immediately
         logout();
         return;
       }
 
-      // Set a timer to log out the user when token expires
       const timer = setTimeout(() => {
         logout();
       }, expiresIn);
 
-      // Then fetch complete user details
       fetchUserDetails().then((userData) => {
         if (userData) {
-          setUser((prevUser) => ({
-            ...prevUser,
-            ...userData,
-          }));
+          setUser((prevUser) => ({ ...prevUser, ...userData }));
         }
+        setLoading(false);
       });
 
-      // Cleanup: clear the timer when component unmounts or token changes
       return () => clearTimeout(timer);
+    } else {
+      setLoading(false);
     }
   }, []);
 
@@ -77,30 +69,21 @@ export const AuthProvider = ({ children }) => {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: new URLSearchParams({
-          username,
-          password,
-        }),
+        body: new URLSearchParams({ username, password }),
       });
 
       if (response.ok) {
         const data = await response.json();
         setToken(data.access_token);
         const decoded = jwtDecode(data.access_token);
-
-        // Set initial user data from token
         const initialUserData = {
           id: decoded.sub,
           role: decoded.is_superuser ? "admin" : "user",
         };
 
-        // Fetch complete user details
         const userDetails = await fetchUserDetails();
         if (userDetails) {
-          setUser({
-            ...initialUserData,
-            ...userDetails,
-          });
+          setUser({ ...initialUserData, ...userDetails });
         } else {
           setUser(initialUserData);
         }
@@ -121,28 +104,21 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, login, logout: logoutUser, fetchUserDetails }}
+      value={{ user, login, logout: logoutUser, fetchUserDetails, loading }}
     >
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Custom hook to use the auth context
 export const useAuth = () => useContext(AuthContext);
 
 export const setToken = (token) => {
   try {
-    if (!token) {
-      throw new Error("No token provided");
-    }
-    // Validate token before storing
+    if (!token) throw new Error("No token provided");
     const decoded = jwtDecode(token);
-    if (!decoded || !decoded.exp) {
-      throw new Error("Invalid token format");
-    }
+    if (!decoded || !decoded.exp) throw new Error("Invalid token format");
 
-    // Store token in localStorage along with a timestamp
     const tokenData = {
       token,
       timestamp: Date.now(),
@@ -158,14 +134,10 @@ export const setToken = (token) => {
 export const fetchToken = () => {
   try {
     const tokenData = localStorage.getItem("auth_token");
-    if (!tokenData) {
-      return null;
-    }
+    if (!tokenData) return null;
 
     const { token, timestamp } = JSON.parse(tokenData);
-
-    // Optional: Check if the token is too old (e.g., older than 24 hours)
-    const MAX_TOKEN_AGE = 24 * 60 * 60 * 1000; // 24 hours
+    const MAX_TOKEN_AGE = 24 * 60 * 60 * 1000;
     if (Date.now() - timestamp > MAX_TOKEN_AGE) {
       clearAuth();
       return null;
@@ -191,16 +163,11 @@ export const logout = async () => {
   try {
     console.log("Initiating logout process...");
     const token = fetchToken();
-
     if (token) {
-      // Call the backend logout endpoint with token in header
       const response = await fetch(`${API_BASE_URL}/api/logout`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       if (!response.ok) {
         console.warn(`Logout request failed: ${response.status}`);
       }
@@ -208,31 +175,18 @@ export const logout = async () => {
   } catch (error) {
     console.error("Logout error:", error);
   } finally {
-    // Always clear local auth data and redirect to login
     clearAuth();
     window.location.href = "/";
   }
 };
 
 export const isTokenValid = (token) => {
-  if (!token) {
-    console.log("No token provided");
-    return false;
-  }
-
+  if (!token) return false;
   try {
     const decoded = jwtDecode(token);
-
-    // Check token expiration
     const isExpValid = decoded.exp > Date.now() / 1000;
-
-    // Check token format and required claims
     const isFormatValid = decoded.sub && decoded.iat;
-
-    const isValid = isExpValid && isFormatValid;
-    console.log("Token validation result:", { isValid, exp: decoded.exp });
-
-    return isValid;
+    return isExpValid && isFormatValid;
   } catch (error) {
     console.error("Token validation error:", error);
     return false;
@@ -241,15 +195,20 @@ export const isTokenValid = (token) => {
 
 export function RequireAuth({ children }) {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
-  console.log("Checking authentication for path:", location.pathname);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        Loading...
+      </div>
+    );
+  }
 
   if (!user) {
     console.log("No user found, redirecting to login");
     return <Navigate to="/" state={{ from: location }} replace />;
   }
 
-  console.log("User authenticated, rendering protected content");
   return children;
 }
