@@ -8,6 +8,9 @@ import {
   CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 
+import { API_BASE_URL } from "../config";
+
+
 function LiveMonitoring() {
   const [isLive, setIsLive] = useState(true);
   const [detectionApproach, setDetectionApproach] = useState("matching");
@@ -106,7 +109,7 @@ function LiveMonitoring() {
     formData.append("video", videoFile);
 
     try {
-      const response = await fetch("http://<your-backend-ip>:8000/upload", {
+      const response = await fetch(`${API_BASE_URL}/upload`, {
         method: "POST",
         body: formData,
       });
