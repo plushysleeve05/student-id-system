@@ -20,6 +20,8 @@ function LiveMonitoring() {
   const [stream, setStream] = useState(null);
   const [videoFile, setVideoFile] = useState(null);
   const [previewURL, setPreviewURL] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
 
   const recentEvents = [
     {
@@ -102,23 +104,28 @@ function LiveMonitoring() {
     }
   };
 
-  const handleVideoUpload = async () => {
-    if (!videoFile) return;
+const handleVideoUpload = async () => {
+  if (!videoFile) return;
 
-    const formData = new FormData();
-    formData.append("video", videoFile);
+  setUploading(true); // ✅ start loading indicator
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/upload`, {
-        method: "POST",
-        body: formData,
-      });
-      const result = await response.json();
-      console.log("Upload response:", result);
-    } catch (error) {
-      console.error("Upload error:", error);
-    }
-  };
+  const formData = new FormData();
+  formData.append("video", videoFile);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    const result = await response.json();
+    console.log("Upload response:", result);
+  } catch (error) {
+    console.error("Upload error:", error);
+  }
+
+  setUploading(false); // ✅ stop loading indicator
+};
+
 
   return (
     <div className="p-4">
@@ -253,13 +260,23 @@ function LiveMonitoring() {
                   </video>
                 )}
               </div>
-                <button
-                onClick={handleVideoUpload}
-                className="px-4 py-2 bg-blue-500 text-white rounded"
-                disabled={!videoFile}
-              >
-                  Upload Video
-                </button></>
+                {uploading ? (
+  <button
+    className="px-4 py-2 bg-gray-400 text-white rounded cursor-not-allowed"
+    disabled
+  >
+    Uploading...
+  </button>
+) : (
+  <button
+    onClick={handleVideoUpload}
+    className="px-4 py-2 bg-blue-500 text-white rounded"
+    disabled={!videoFile}
+  >
+    Upload Video
+  </button>
+)}
+</>
           )}
         </div>
 
