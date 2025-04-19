@@ -1,9 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { Shield, AlertTriangle, Info, Bell, X } from "lucide-react";
 
 function SecurityAlerts() {
-  // Mock data for security alerts
-  const alerts = [
+  // 1) Initialize state from your mock data
+  const [alerts, setAlerts] = useState([
     {
       id: 1,
       type: "high",
@@ -25,7 +25,12 @@ function SecurityAlerts() {
       time: "1 hour ago",
       location: "System",
     },
-  ];
+  ]);
+
+  // 2) Dismiss handler: remove an alert by id
+  const dismissAlert = (id) => {
+    setAlerts((prev) => prev.filter((alert) => alert.id !== id));
+  };
 
   const getAlertStyles = (type) => {
     switch (type) {
@@ -78,7 +83,9 @@ function SecurityAlerts() {
             <Shield className="w-5 h-5 text-red-600" />
             Security Alerts
           </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Recent security notifications</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Recent security notifications
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
@@ -107,7 +114,12 @@ function SecurityAlerts() {
                     <p className="text-sm font-medium dark:text-white">
                       {alert.message}
                     </p>
-                    <button className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
+                    {/* 3) Wire up dismiss */}
+                    <button
+                      onClick={() => dismissAlert(alert.id)}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                      aria-label="Dismiss alert"
+                    >
                       <X className="w-4 h-4 text-gray-400" />
                     </button>
                   </div>
@@ -121,6 +133,11 @@ function SecurityAlerts() {
             </div>
           );
         })}
+        {alerts.length === 0 && (
+          <p className="text-center text-gray-500 dark:text-gray-400">
+            No active alerts
+          </p>
+        )}
       </div>
 
       {/* View All Link */}

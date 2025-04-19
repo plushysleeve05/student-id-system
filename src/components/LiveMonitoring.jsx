@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-// Heroicons v2
 import {
   CameraIcon,
   ArrowUpTrayIcon,
@@ -7,9 +6,7 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
 } from "@heroicons/react/24/outline";
-
 import { API_BASE_URL } from "../config";
-
 
 function LiveMonitoring() {
   const [isLive, setIsLive] = useState(true);
@@ -21,31 +18,21 @@ function LiveMonitoring() {
   const [videoFile, setVideoFile] = useState(null);
   const [previewURL, setPreviewURL] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [eventLog, setEventLog] = useState([]);
 
-
-  const recentEvents = [
-    {
-      id: 1,
-      type: "success",
-      name: "John Smith",
-      time: "2 mins ago",
-      location: "Main Entrance",
-    },
-    {
-      id: 2,
-      type: "warning",
-      name: "Unknown Person",
-      time: "5 mins ago",
-      location: "Side Gate",
-    },
-    {
-      id: 3,
-      type: "success",
-      name: "Sarah Johnson",
-      time: "8 mins ago",
-      location: "Main Entrance",
-    },
-  ];
+  useEffect(() => {
+    const ws = new WebSocket("ws://34.72.198.201:8000/ws");
+    ws.onopen = () => {
+      console.log("WebSocket connected ✅");
+      ws.send("Hello from frontend");
+    };
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setEventLog((prev) => [data, ...prev]);
+    };
+    ws.onerror = (err) => console.error("WebSocket error:", err);
+    return () => ws.close();
+  }, []);
 
   const stopStream = React.useCallback(() => {
     if (stream) {
@@ -104,28 +91,26 @@ function LiveMonitoring() {
     }
   };
 
-const handleVideoUpload = async () => {
-  if (!videoFile) return;
-
-  setUploading(true); // ✅ start loading indicator
-
-  const formData = new FormData();
-  formData.append("video", videoFile);
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/upload`, {
-      method: "POST",
-      body: formData,
-    });
-    const result = await response.json();
-    console.log("Upload response:", result);
-  } catch (error) {
-    console.error("Upload error:", error);
-  }
-
-  setUploading(false); // ✅ stop loading indicator
-};
-
+  const handleVideoUpload = async () => {
+    if (!videoFile) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", videoFile);
+    try {
+      const response = await fetch(`${API_BASE_URL}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      const result = await response.json();
+      console.log("Upload response:", result);
+      // ✅ Reset state to allow re-upload
+      setVideoFile(null);
+      setPreviewURL(null);
+    } catch (error) {
+      console.error("Upload error:", error);
+    }
+    setUploading(false);
+  };
 
   return (
     <div className="p-4">
@@ -242,7 +227,8 @@ const handleVideoUpload = async () => {
               </div>
             </div>
           ) : (
-            <><div className="relative mb-6 rounded-lg overflow-hidden bg-gray-900 aspect-video flex flex-col items-center justify-center gap-2">
+            <>
+              <div className="relative mb-6 rounded-lg overflow-hidden bg-gray-900 aspect-video flex flex-col items-center justify-center gap-2">
                 {!previewURL ? (
                   <>
                     <ArrowUpTrayIcon className="w-12 h-12 text-gray-600" />
@@ -251,7 +237,8 @@ const handleVideoUpload = async () => {
                       type="file"
                       accept="video/*"
                       onChange={handleVideoChange}
-                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer" />
+                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                    />
                   </>
                 ) : (
                   <video controls className="w-full h-full object-cover">
@@ -260,31 +247,31 @@ const handleVideoUpload = async () => {
                   </video>
                 )}
               </div>
-                {uploading ? (
-  <button
-    className="px-4 py-2 bg-gray-400 text-white rounded cursor-not-allowed"
-    disabled
-  >
-    Uploading...
-  </button>
-) : (
-  <button
-    onClick={handleVideoUpload}
-    className="px-4 py-2 bg-blue-500 text-white rounded"
-    disabled={!videoFile}
-  >
-    Upload Video
-  </button>
-)}
-</>
+              {uploading ? (
+                <button
+                  className="px-4 py-2 bg-gray-400 text-white rounded cursor-not-allowed"
+                  disabled
+                >
+                  Uploading...
+                </button>
+              ) : (
+                <button
+                  onClick={handleVideoUpload}
+                  className="px-4 py-2 bg-blue-500 text-white rounded"
+                  disabled={!videoFile}
+                >
+                  Upload Video
+                </button>
+              )}
+            </>
           )}
         </div>
 
         <div className="w-1/3">
           <div className="space-y-4">
-            {recentEvents.map((event) => (
+            {eventLog.map((event, index) => (
               <div
-                key={event.id}
+                key={index}
                 className="flex items-center gap-3 p-3 rounded-lg"
               >
                 <div
