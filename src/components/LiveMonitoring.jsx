@@ -127,6 +127,7 @@ function LiveMonitoring() {
     setUploading(true);
     const formData = new FormData();
     formData.append("file", videoFile); // matches FastAPI param
+    formData.append("mode", detectionApproach); // add detection mode (matching or ml)
     try {
       const res = await fetch(`${API_BASE_URL}/upload`, {
         method: "POST",
