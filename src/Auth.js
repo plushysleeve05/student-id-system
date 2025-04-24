@@ -6,7 +6,24 @@ import { API_BASE_URL } from "./config";
 export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  // ✅ Step 1: Initialize user from localStorage token
+  const [user, setUser] = useState(() => {
+    try {
+      const token = fetchToken();
+      if (token && isTokenValid(token)) {
+        const decoded = jwtDecode(token);
+        console.log("✅ Decoded user on init:", decoded);
+        return {
+          id: decoded.sub,
+          role: decoded.is_superuser ? "admin" : "user",
+        };
+      }
+    } catch (err) {
+      console.error("❌ Error decoding token during init:", err);
+    }
+    return null;
+  });
+
   const [loading, setLoading] = useState(true);
 
   const fetchUserDetails = async () => {
@@ -22,25 +39,25 @@ export const AuthProvider = ({ children }) => {
         const userData = await response.json();
         return userData;
       }
+
+      console.warn("❌ /users/me failed:", response.status);
       return null;
     } catch (error) {
-      console.error("Error fetching user details:", error);
+      console.error("❌ Error fetching user details:", error);
       return null;
     }
   };
 
   useEffect(() => {
     const token = fetchToken();
+    console.log("🔁 Token on useEffect run:", token);
+
     if (token && isTokenValid(token)) {
       const decoded = jwtDecode(token);
-      const initialUserData = {
-        id: decoded.sub,
-        role: decoded.is_superuser ? "admin" : "user",
-      };
-      setUser(initialUserData);
-
       const expiresIn = decoded.exp * 1000 - Date.now();
+
       if (expiresIn <= 0) {
+        console.warn("❌ Token expired");
         logout();
         return;
       }
@@ -51,13 +68,17 @@ export const AuthProvider = ({ children }) => {
 
       fetchUserDetails().then((userData) => {
         if (userData) {
+          console.log("✅ User details fetched:", userData);
           setUser((prevUser) => ({ ...prevUser, ...userData }));
+        } else {
+          console.warn("⚠️ No user data returned from server");
         }
         setLoading(false);
       });
 
       return () => clearTimeout(timer);
     } else {
+      console.warn("❌ Invalid or missing token during useEffect");
       setLoading(false);
     }
   }, []);
@@ -90,9 +111,11 @@ export const AuthProvider = ({ children }) => {
 
         return true;
       }
+
+      console.warn("❌ Login failed:", response.status);
       return false;
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("❌ Login error:", error);
       return false;
     }
   };
@@ -124,9 +147,9 @@ export const setToken = (token) => {
       timestamp: Date.now(),
     };
     localStorage.setItem("auth_token", JSON.stringify(tokenData));
-    console.log("Token stored successfully");
+    console.log("✅ Token stored in localStorage");
   } catch (error) {
-    console.error("Error storing token:", error);
+    console.error("❌ Error storing token:", error);
     throw error;
   }
 };
@@ -134,18 +157,23 @@ export const setToken = (token) => {
 export const fetchToken = () => {
   try {
     const tokenData = localStorage.getItem("auth_token");
-    if (!tokenData) return null;
+    if (!tokenData) {
+      console.warn("⚠️ No token found in localStorage");
+      return null;
+    }
 
     const { token, timestamp } = JSON.parse(tokenData);
     const MAX_TOKEN_AGE = 24 * 60 * 60 * 1000;
+
     if (Date.now() - timestamp > MAX_TOKEN_AGE) {
+      console.warn("⚠️ Token expired in localStorage");
       clearAuth();
       return null;
     }
 
     return token;
   } catch (error) {
-    console.error("Error fetching token:", error);
+    console.error("❌ Error fetching token from localStorage:", error);
     return null;
   }
 };
@@ -153,15 +181,15 @@ export const fetchToken = () => {
 export const clearAuth = () => {
   try {
     localStorage.removeItem("auth_token");
-    console.log("Authentication data cleared");
+    console.log("✅ Auth token cleared from localStorage");
   } catch (error) {
-    console.error("Error clearing auth:", error);
+    console.error("❌ Error clearing token:", error);
   }
 };
 
 export const logout = async () => {
   try {
-    console.log("Initiating logout process...");
+    console.log("🔐 Logging out...");
     const token = fetchToken();
     if (token) {
       const response = await fetch(`${API_BASE_URL}/api/logout`, {
@@ -169,11 +197,11 @@ export const logout = async () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) {
-        console.warn(`Logout request failed: ${response.status}`);
+        console.warn(`❌ Logout request failed: ${response.status}`);
       }
     }
   } catch (error) {
-    console.error("Logout error:", error);
+    console.error("❌ Logout error:", error);
   } finally {
     clearAuth();
     window.location.href = "/";
@@ -188,7 +216,7 @@ export const isTokenValid = (token) => {
     const isFormatValid = decoded.sub && decoded.iat;
     return isExpValid && isFormatValid;
   } catch (error) {
-    console.error("Token validation error:", error);
+    console.error("❌ Token validation error:", error);
     return false;
   }
 };
@@ -206,7 +234,7 @@ export function RequireAuth({ children }) {
   }
 
   if (!user) {
-    console.log("No user found, redirecting to login");
+    console.log("🚪 No user found, redirecting to login");
     return <Navigate to="/" state={{ from: location }} replace />;
   }
 

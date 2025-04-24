@@ -17,12 +17,15 @@ import SecurityAlerts from "./components/SecurityAlerts";
 import LiveMonitoring from "./components/LiveMonitoring";
 import LoginPage from "./components/LoginPage";
 import RegistrationPage from "./components/RegistrationPage";
-// import SuperAdminRegistrationPage from "./components/SuperAdminRegistrationPage";
 import AdminManagement from "./components/AdminManagement";
 
 function ProtectedAdminRoute({ children }) {
   const { user } = useContext(AuthContext);
-  return user?.role === 'admin' ? children : <Navigate to="/dashboard" replace />;
+  return user?.role === "admin" ? (
+    children
+  ) : (
+    <Navigate to="/dashboard" replace />
+  );
 }
 
 function Layout({ children }) {
@@ -44,8 +47,6 @@ function Layout({ children }) {
   }, [darkMode]);
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
-
-  // Hide Sidebar & Navbar on Login Page
   const isLoginPage = location.pathname === "/";
 
   return (
@@ -74,7 +75,6 @@ function Layout({ children }) {
 }
 
 function App() {
-  // Initialize theme from localStorage on app load
   useLayoutEffect(() => {
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme === "dark") {
@@ -91,7 +91,7 @@ function App() {
         <Route path="/" element={<LoginPage />} />
         <Route path="/register" element={<RegistrationPage />} />
 
-        {/* Protected Routes */}
+        {/* Admin-only Route */}
         <Route
           path="/admin-management"
           element={
@@ -104,52 +104,66 @@ function App() {
             </RequireAuth>
           }
         />
+
+        {/* Authenticated Routes */}
         <Route
           path="/dashboard"
           element={
-            <Layout>
-              <Dashboard />
-            </Layout>
+            <RequireAuth>
+              <Layout>
+                <Dashboard />
+              </Layout>
+            </RequireAuth>
           }
         />
         <Route
           path="/settings"
           element={
-            <Layout>
-              <Settings />
-            </Layout>
+            <RequireAuth>
+              <Layout>
+                <Settings />
+              </Layout>
+            </RequireAuth>
           }
         />
         <Route
           path="/students"
           element={
-            <Layout>
-              <Students />
-            </Layout>
+            <RequireAuth>
+              <Layout>
+                <Students />
+              </Layout>
+            </RequireAuth>
           }
         />
         <Route
           path="/enrollment"
           element={
-            <Layout>
-              <StudentEnrollment />
-            </Layout>
+            <RequireAuth>
+              <Layout>
+                <StudentEnrollment />
+              </Layout>
+            </RequireAuth>
           }
         />
         <Route
           path="/alerts"
           element={
-            <Layout>
-              <SecurityAlerts />
-            </Layout>
+            <RequireAuth>
+              <Layout>
+                <SecurityAlerts />
+              </Layout>
+            </RequireAuth>
           }
         />
         <Route
           path="/live-monitoring"
           element={
-            <Layout>
-              <LiveMonitoring />
-            </Layout>
+            <RequireAuth>
+              <Layout>
+                <LiveMonitoring />
+              </Layout>
+            </RequireAuth>
           }
         />
       </Routes>
