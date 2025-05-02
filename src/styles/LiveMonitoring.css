@@ -1,0 +1,5 @@
+.video-container video {
+  z-index: 10; /* Ensure it is above other elements */
+  visibility: visible; /* Ensure it is not hidden */
+  display: block; /* Ensure it is displayed */
+}
