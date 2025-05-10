@@ -1,57 +1,63 @@
-import React, { useState } from "react";
+// src/components/SecurityAlerts.jsx
+
+import React, { useState, useEffect } from "react";
 import { Shield, AlertTriangle, Info, Bell, X } from "lucide-react";
+import { API_BASE_URL } from "../config";
 
-function SecurityAlerts() {
-  // 1) Dummy alerts with type-specific extra fields
-  const [alerts, setAlerts] = useState([
-    {
-      id: 1,
-      type: "high",
-      message: "Unauthorized access attempt detected",
-      time: "2 mins ago",
-      full_timestamp: "2025-04-25 02:02:23",
-      location: "Main Entrance",
-      student_id: "S1234567",
-      image_url: "https://via.placeholder.com/150",
-      camera_id: "Camera A",
-    },
-    {
-      id: 2,
-      type: "medium",
-      message: "Multiple failed recognition attempts",
-      time: "15 mins ago",
-      full_timestamp: "2025-04-25 01:47:12",
-      location: "Side Gate",
-      failedAttempts: 5,
-      lastAttemptTime: "2025-04-25 01:46:50",
-      operator: "facial-recog-service-1",
-    },
-    {
-      id: 3,
-      type: "low",
-      message: "System update available",
-      time: "1 hour ago",
-      full_timestamp: "2025-04-25 01:00:00",
-      location: "System",
-      version: "v2.3.4",
-      releaseNotesUrl: "https://example.com/release-notes/v2.3.4",
-    },
-  ]);
+// helper: turn "full_timestamp" or "studentId" into "Full Timestamp" / "Student Id"
+function formatKey(key) {
+  return key
+    .replace(/([A-Z])/g, " $1") // split camelCase
+    .replace(/[_-]/g, " ") // split snake_case / kebab-case
+    .replace(/\s+/g, " ") // collapse multiple spaces
+    .trim()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
 
-  // 2) Which alert is open?
+export default function SecurityAlerts() {
+  const [alerts, setAlerts] = useState([]);
   const [selected, setSelected] = useState(null);
 
-  // 3) Dismiss & acknowledge
-  const dismissAlert = (id) => {
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
-    if (selected?.id === id) setSelected(null);
-  };
-  const acknowledgeAlert = (id) => {
-    // stub: just remove it for now
-    dismissAlert(id);
-  };
+  // ─── Fetch existing alerts on mount ──────────────────────
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/security-alerts`)
+      .then((res) => res.json())
+      .then(setAlerts)
+      .catch((err) => console.error("Fetch alerts failed", err));
+  }, []);
 
-  // styling helpers...
+  // ─── Subscribe to WS for new alerts ─────────────────────
+  useEffect(() => {
+    const ws = new WebSocket(API_BASE_URL.replace(/^http/, "ws") + "/ws");
+
+    ws.onopen = () => console.log("Alerts WS connected");
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.id) {
+        setAlerts((prev) => [data, ...prev]);
+      }
+    };
+    ws.onerror = (err) => console.error("Alerts WS error", err);
+    ws.onclose = () => console.log("Alerts WS closed");
+
+    return () => ws.close();
+  }, []);
+
+  // ─── Dismiss / acknowledge helpers ─────────────────────
+  const dismissAlert = async (id) => {
+    try {
+      await fetch(`${API_BASE_URL}/security-alerts/${id}`, {
+        method: "DELETE",
+      });
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+      if (selected?.id === id) setSelected(null);
+    } catch (err) {
+      console.error("Dismiss failed", err);
+    }
+  };
+  const acknowledgeAlert = (id) => dismissAlert(id);
+
+  // ─── Styling helpers ────────────────────────────────────
   const getAlertStyles = (type) => {
     switch (type) {
       case "high":
@@ -61,6 +67,18 @@ function SecurityAlerts() {
           icon: "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400",
         };
       case "medium":
+        return {
+          container:
+            "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-100 dark:border-yellow-900/30 hover:bg-yellow-100/50 cursor-pointer",
+          icon: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400",
+        };
+      case "success":
+        return {
+          container:
+            "bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-900/30 hover:bg-green-100/50 cursor-pointer",
+          icon: "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400",
+        };
+      case "warning":
         return {
           container:
             "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-100 dark:border-yellow-900/30 hover:bg-yellow-100/50 cursor-pointer",
@@ -87,6 +105,10 @@ function SecurityAlerts() {
         return AlertTriangle;
       case "medium":
         return Bell;
+      case "success":
+        return Bell;
+      case "warning":
+        return AlertTriangle;
       case "low":
         return Info;
       default:
@@ -94,6 +116,7 @@ function SecurityAlerts() {
     }
   };
 
+  // ─── Render ─────────────────────────────────────────────
   return (
     <>
       {/* Header */}
@@ -114,7 +137,11 @@ function SecurityAlerts() {
 
       {/* Alerts List */}
       <div className="space-y-3">
-        {alerts.length > 0 ? (
+        {alerts.length === 0 ? (
+          <p className="text-center text-gray-500 dark:text-gray-400">
+            No active alerts
+          </p>
+        ) : (
           alerts.map((alert) => {
             const styles = getAlertStyles(alert.type);
             const Icon = getAlertIcon(alert.type);
@@ -154,10 +181,6 @@ function SecurityAlerts() {
               </div>
             );
           })
-        ) : (
-          <p className="text-center text-gray-500 dark:text-gray-400">
-            No active alerts
-          </p>
         )}
       </div>
 
@@ -170,9 +193,10 @@ function SecurityAlerts() {
       {selected && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden w-11/12 max-w-lg">
+            {/* Modal Header */}
             <div className="flex justify-between items-center px-6 py-4 border-b dark:border-gray-700">
               <h3 className="text-lg font-semibold dark:text-white">
-                Alert Details
+                Alert #{selected.id} Details
               </h3>
               <button
                 onClick={() => setSelected(null)}
@@ -182,76 +206,42 @@ function SecurityAlerts() {
               </button>
             </div>
 
+            {/* Modal Body */}
             <div className="p-6 space-y-4">
-              {/* Shared info */}
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                {/* Shared fields */}
                 <dt className="font-medium dark:text-gray-300">Type</dt>
                 <dd className="dark:text-white">{selected.type}</dd>
                 <dt className="font-medium dark:text-gray-300">When</dt>
-                <dd className="dark:text-white">{selected.full_timestamp}</dd>
+                <dd className="dark:text-white">{selected.time}</dd>
                 <dt className="font-medium dark:text-gray-300">Location</dt>
                 <dd className="dark:text-white">{selected.location}</dd>
                 <dt className="font-medium dark:text-gray-300">Message</dt>
                 <dd className="dark:text-white">{selected.message}</dd>
+
+                {/* Dynamically render any extra keys */}
+                {Object.entries(selected)
+                  .filter(
+                    ([key]) =>
+                      !["id", "type", "time", "location", "message"].includes(
+                        key
+                      )
+                  )
+                  .map(([key, value]) => (
+                    <React.Fragment key={key}>
+                      <dt className="font-medium dark:text-gray-300">
+                        {formatKey(key)}
+                      </dt>
+                      <dd className="dark:text-white">
+                        {Array.isArray(value)
+                          ? value.join(", ")
+                          : String(value)}
+                      </dd>
+                    </React.Fragment>
+                  ))}
               </dl>
 
-              {/* Type-specific details */}
-              {selected.type === "high" && (
-                <>
-                  <div className="flex justify-center">
-                    <img
-                      src={selected.image_url}
-                      alt={`Student ${selected.student_id}`}
-                      className="h-32 w-32 rounded-full object-cover border"
-                    />
-                  </div>
-                  <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <dt className="font-medium dark:text-gray-300">
-                      Student ID
-                    </dt>
-                    <dd className="dark:text-white">{selected.student_id}</dd>
-                    <dt className="font-medium dark:text-gray-300">Camera</dt>
-                    <dd className="dark:text-white">{selected.camera_id}</dd>
-                  </dl>
-                </>
-              )}
-
-              {selected.type === "medium" && (
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <dt className="font-medium dark:text-gray-300">Attempts</dt>
-                  <dd className="dark:text-white">{selected.failedAttempts}</dd>
-                  <dt className="font-medium dark:text-gray-300">
-                    Last Attempt
-                  </dt>
-                  <dd className="dark:text-white">
-                    {selected.lastAttemptTime}
-                  </dd>
-                  <dt className="font-medium dark:text-gray-300">Operator</dt>
-                  <dd className="dark:text-white">{selected.operator}</dd>
-                </dl>
-              )}
-
-              {selected.type === "low" && (
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <dt className="font-medium dark:text-gray-300">Version</dt>
-                  <dd className="dark:text-white">{selected.version}</dd>
-                  <dt className="font-medium dark:text-gray-300">
-                    Release Notes
-                  </dt>
-                  <dd className="dark:text-white">
-                    <a
-                      href={selected.releaseNotesUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      View Notes
-                    </a>
-                  </dd>
-                </dl>
-              )}
-
-              {/* Actions */}
+              {/* Modal Actions */}
               <div className="mt-6 flex justify-end gap-3">
                 <button
                   onClick={() => dismissAlert(selected.id)}
@@ -273,5 +263,3 @@ function SecurityAlerts() {
     </>
   );
 }
-
-export default SecurityAlerts;
