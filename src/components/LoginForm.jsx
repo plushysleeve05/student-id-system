@@ -144,13 +144,13 @@ const LoginForm = () => {
         </button>
 
         {/* Test Credentials */}
-        <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        {/* <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
           <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
             Test Account 1
           </h3>
           <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-            <p>Username: admin</p>
-            <p>Password: admin123</p>
+            <p>Username: root</p>
+            <p>Password: RootPassword123</p>
           </div>
           <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
             Test Account 2
@@ -159,7 +159,7 @@ const LoginForm = () => {
             <p>Username: test1</p>
             <p>Password: Superadmin123</p>
           </div>
-        </div>
+        </div> */}
       </form>
     </div>
   );

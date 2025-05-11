@@ -19,44 +19,126 @@ function LiveMonitoring() {
   const [uploading, setUploading] = useState(false);
   const [eventLog, setEventLog] = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
+  const [liveWsConnected, setLiveWsConnected] = useState(false);
   const [streaming, setStreaming] = useState(false);
 
   const videoRef = useRef(null);
   const wsRef = useRef(null);
+  const wsLiveRef = useRef(null);
   const bottomRef = useRef(null);
+  const canvasRef = useRef(null);
+  const frameIntervalRef = useRef(null);
 
-  // ─── WebSocket Setup ─────────────────────────────
+  // ─── Upload‐mode WebSocket (only for /ws) ─────────────────────────────
   useEffect(() => {
-    const ws = new WebSocket(API_BASE_URL.replace(/^http/, "ws") + "/ws");
-    wsRef.current = ws;
+    let ws;
+    let retryTimer;
 
-    ws.onopen = () => {
-      console.log("WebSocket connected ✅");
-      setWsConnected(true);
-      ws.send(JSON.stringify({ type: "ready" }));
+    const connect = () => {
+      ws = new WebSocket(API_BASE_URL.replace(/^http/, "ws") + "/ws");
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log("Upload WS connected ✅");
+        setWsConnected(true);
+        ws.send(JSON.stringify({ type: "ready" }));
+      };
+
+      ws.onmessage = (evt) => {
+        const data = JSON.parse(evt.data);
+        if (!data.echo) {
+          setEventLog((prev) => [data, ...prev]);
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.warn("Upload WS error, reconnecting…", err);
+        ws.close();
+      };
+
+      ws.onclose = () => {
+        console.log("Upload WS closed ❌ – retrying in 1s");
+        setWsConnected(false);
+        retryTimer = setTimeout(connect, 1000);
+      };
     };
 
-    ws.onmessage = (evt) => {
+    connect();
+
+    return () => {
+      clearTimeout(retryTimer);
+      ws?.close();
+    };
+  }, []); // runs only once
+
+  // ─── Live‐mode WebSocket (for /ws/live) ──────────────────────────────
+  useEffect(() => {
+    if (!isLive || !streaming) return;
+
+    const url =
+      API_BASE_URL.replace(/^http/, "ws") +
+      `/ws/live?mode=${detectionApproach}`;
+    const wsLive = new WebSocket(url);
+    wsLive.binaryType = "arraybuffer";
+    wsLiveRef.current = wsLive;
+
+    wsLive.onopen = () => {
+      console.log("Live WS connected ✅", detectionApproach);
+      setLiveWsConnected(true);
+    };
+
+    wsLive.onmessage = (evt) => {
       const data = JSON.parse(evt.data);
-      if (data.echo) return;
-      setEventLog((prev) => [data, ...prev]);
+      console.debug("Live frame result:", data);
+      setEventLog((prev) => {
+        const last = prev[0];
+        if (last && last.type === data.type && last.student === data.student) {
+          return prev;
+        }
+        return [data, ...prev];
+      });
     };
 
-    ws.onerror = (err) => console.error("WebSocket error:", err);
+    wsLive.onerror = (err) => console.error("Live WS error:", err);
 
-    ws.onclose = () => {
-      console.log("WebSocket closed ❌");
-      setWsConnected(false);
+    wsLive.onclose = () => {
+      console.log("Live WS closed ❌");
+      setLiveWsConnected(false);
     };
 
-    return () => ws.close();
-  }, []);
+    return () => {
+      wsLive.close();
+      wsLiveRef.current = null;
+    };
+  }, [isLive, streaming, detectionApproach]);
+
+  // ─── Live‐Frame Capture & Send ────────────────────
+  useEffect(() => {
+    if (isLive && streaming && liveWsConnected) {
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      const ctx = canvas.getContext("2d");
+
+      frameIntervalRef.current = setInterval(() => {
+        if (wsLiveRef.current.readyState !== WebSocket.OPEN) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        canvas.toBlob(
+          (blob) => {
+            blob.arrayBuffer().then((buf) => wsLiveRef.current.send(buf));
+          },
+          "image/jpeg",
+          0.7
+        );
+      }, 100);
+    }
+    return () => clearInterval(frameIntervalRef.current);
+  }, [isLive, streaming, liveWsConnected]);
 
   // ─── Scroll to Latest Event ───────────────────────
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [eventLog]);
 
   // ─── Update Camera List ───────────────────────────
@@ -72,10 +154,8 @@ function LiveMonitoring() {
 
     updateCameras();
     navigator.mediaDevices.addEventListener("devicechange", updateCameras);
-
-    return () => {
+    return () =>
       navigator.mediaDevices.removeEventListener("devicechange", updateCameras);
-    };
   }, [selectedCamera]);
 
   // ─── Camera Start and Stop ────────────────────────
@@ -93,12 +173,10 @@ function LiveMonitoring() {
         },
         audio: false,
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        console.log("Camera started successfully");
-        setStreaming(true);
-      }
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      console.log("Camera started successfully");
+      setStreaming(true);
     } catch (err) {
       console.error("Error accessing camera:", err);
       alert(`Camera Error: ${err.message}`);
@@ -109,7 +187,7 @@ function LiveMonitoring() {
   const stopCamera = () => {
     const stream = videoRef.current?.srcObject;
     if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      stream.getTracks().forEach((t) => t.stop());
       videoRef.current.srcObject = null;
       console.log("Camera stopped.");
     }
@@ -128,12 +206,7 @@ function LiveMonitoring() {
   };
 
   const handleVideoUpload = async () => {
-    if (!videoFile) return;
-    if (!wsConnected) {
-      alert("WebSocket not ready. Please wait and try again.");
-      return;
-    }
-
+    if (!videoFile || !wsConnected) return;
     setUploading(true);
     const formData = new FormData();
     formData.append("file", videoFile);
@@ -144,8 +217,7 @@ function LiveMonitoring() {
         method: "POST",
         body: formData,
       });
-      const data = await res.json();
-      console.log("Upload response:", data);
+      console.log("Upload response:", await res.json());
       setVideoFile(null);
       setPreviewURL(null);
     } catch (err) {
@@ -157,6 +229,8 @@ function LiveMonitoring() {
   // ─── Render ───────────────────────────────────────
   return (
     <div className="p-4">
+      <canvas ref={canvasRef} style={{ display: "none" }} />
+
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
@@ -177,21 +251,17 @@ function LiveMonitoring() {
           <label className="flex items-center gap-1">
             <input
               type="radio"
-              name="videoMode"
-              value="live"
               checked={isLive}
               onChange={() => setIsLive(true)}
-            />
+            />{" "}
             Live Feed
           </label>
           <label className="flex items-center gap-1">
             <input
               type="radio"
-              name="videoMode"
-              value="upload"
               checked={!isLive}
               onChange={() => setIsLive(false)}
-            />
+            />{" "}
             Upload Video
           </label>
         </div>
@@ -206,47 +276,42 @@ function LiveMonitoring() {
           <label className="flex items-center gap-1">
             <input
               type="radio"
-              name="detectionApproach"
               value="matching"
               checked={detectionApproach === "matching"}
               onChange={() => setDetectionApproach("matching")}
-            />
+            />{" "}
             Matching
           </label>
           <label className="flex items-center gap-1">
             <input
               type="radio"
-              name="detectionApproach"
               value="ml"
               checked={detectionApproach === "ml"}
               onChange={() => setDetectionApproach("ml")}
-            />
+            />{" "}
             Machine Learning
           </label>
         </div>
       </div>
 
-      {/* Main Panel */}
       <div className="flex gap-6">
         {/* Left Side */}
         <div className="flex-1">
           {isLive ? (
             // Live Camera View
             <div className="relative mb-6 rounded-lg overflow-hidden bg-gray-900 aspect-video flex flex-col items-center justify-center">
-              {/* Camera Selection and Button */}
-              <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-4 mb-4">
                 <select
                   value={selectedCamera}
                   onChange={(e) => setSelectedCamera(e.target.value)}
                   className="border p-2 rounded bg-gray-800 text-white w-full sm:w-2/3"
                 >
-                  {cameras.map((camera) => (
-                    <option key={camera.deviceId} value={camera.deviceId}>
-                      {camera.label || `Camera ${camera.deviceId}`}
+                  {cameras.map((cam) => (
+                    <option key={cam.deviceId} value={cam.deviceId}>
+                      {cam.label || cam.deviceId}
                     </option>
                   ))}
                 </select>
-
                 <button
                   onClick={streaming ? stopCamera : startCamera}
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 w-full sm:w-auto"
@@ -254,32 +319,19 @@ function LiveMonitoring() {
                   {streaming ? "Stop Stream" : "Start Stream"}
                 </button>
               </div>
-
-              {/* Video */}
-              <div
-                className="relative w-full rounded-lg overflow-hidden "
-                style={{ aspectRatio: "4/3" }}
-              >
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-contain"
-                  style={
-                    {
-                      // border: "3px solid #4caf50",
-                      // borderRadius: "10px",
-                    }
-                  }
-                />
-                {streaming && (
-                  <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded">
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                    LIVE
-                  </div>
-                )}
-              </div>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-contain"
+              />
+              {streaming && (
+                <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded">
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse" />{" "}
+                  LIVE
+                </div>
+              )}
             </div>
           ) : (
             <>
@@ -293,38 +345,32 @@ function LiveMonitoring() {
                       type="file"
                       accept="video/*"
                       onChange={handleVideoChange}
-                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                      className="absolute inset-0 opacity-0 cursor-pointer"
                     />
                   </>
                 ) : (
                   <video
+                    src={previewURL}
                     autoPlay
                     muted
                     loop
                     playsInline
                     controls
                     className="w-full h-full object-cover"
-                  >
-                    <source src={previewURL} type={videoFile?.type} />
-                    Your browser does not support the video tag.
-                  </video>
+                  />
                 )}
               </div>
-
-              {/* Upload Button Under Box */}
-              <div className="mb-6">
-                <button
-                  onClick={handleVideoUpload}
-                  disabled={!videoFile || !wsConnected || uploading}
-                  className={`px-4 py-2 rounded text-white ${
-                    !videoFile || !wsConnected || uploading
-                      ? "bg-blue-400 cursor-not-allowed"
-                      : "bg-blue-600 hover:bg-blue-700"
-                  }`}
-                >
-                  {uploading ? "Uploading..." : "Upload Video"}
-                </button>
-              </div>
+              <button
+                onClick={handleVideoUpload}
+                disabled={!videoFile || !wsConnected || uploading}
+                className={`px-4 py-2 rounded text-white ${
+                  !videoFile || !wsConnected || uploading
+                    ? "bg-blue-400 cursor-not-allowed"
+                    : "bg-blue-600 hover:bg-blue-700"
+                }`}
+              >
+                {uploading ? "Uploading..." : "Upload Video"}
+              </button>
             </>
           )}
         </div>
